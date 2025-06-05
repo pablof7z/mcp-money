@@ -268,10 +268,120 @@ class MCPWallet {
     }
   }
 
-  async deposit(amount: number, mintUrl: string): Promise<{ success?: boolean; timeout?: boolean; amount: number; mintUrl: string; invoice?: string }> {
+  async createDepositInvoice(amount: number, mintUrl?: string): Promise<{ bolt11: string; amount: number; mintUrl: string; depositId: string }> {
     if (!this.wallet || !this.walletData) throw new Error('Wallet not initialized');
     
     try {
+      // If no mint URL provided, use first available mint
+      if (!mintUrl) {
+        if (!this.walletData.mints || this.walletData.mints.length === 0) {
+          throw new Error('No mints configured. Please add a mint first.');
+        }
+        mintUrl = this.walletData.mints[0];
+      }
+      
+      // Add mint to wallet configuration if not already present
+      if (!this.walletData.mints.includes(mintUrl)) {
+        this.walletData.mints.push(mintUrl);
+        this.wallet.mints = this.walletData.mints;
+        this.saveWallet();
+      }
+      
+      const deposit: NDKCashuDeposit = this.wallet.deposit(amount, mintUrl);
+      const invoice = await deposit.start();
+      
+      // Generate unique ID for tracking this deposit
+      const depositId = `deposit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Set up background monitoring for this deposit
+      deposit.on("success", () => {
+        console.log(`✅ Deposit ${depositId} completed successfully`);
+        this.saveWallet();
+      });
+      
+      deposit.on("error", (error) => {
+        console.error(`❌ Deposit ${depositId} failed:`, error);
+      });
+      
+      return { bolt11: invoice, amount, mintUrl, depositId };
+      
+    } catch (error) {
+      console.error('Error creating deposit invoice:', error);
+      throw error;
+    }
+  }
+
+  async deposit(amount: number, mintUrl?: string): Promise<{ success?: boolean; timeout?: boolean; amount: number; mintUrl: string; invoice?: string }> {
+    if (!this.wallet || !this.walletData) throw new Error('Wallet not initialized');
+    
+    try {
+      // If no mint URL provided, try all mints concurrently and return first response
+      if (!mintUrl) {
+        if (!this.walletData.mints || this.walletData.mints.length === 0) {
+          throw new Error('No mints configured. Please add a mint first.');
+        }
+        
+        // Create a promise that resolves on first successful mint response
+        const firstSuccessfulMint = await new Promise<{mint: string, deposit: NDKCashuDeposit, invoice: string}>((resolve, reject) => {
+          let completedAttempts = 0;
+          let hasResolved = false;
+          
+          this.walletData!.mints.forEach(async (mint) => {
+            try {
+              // Add mint to wallet configuration if not already present
+              if (!this.wallet!.mints.includes(mint)) {
+                this.wallet!.mints = [...(this.wallet!.mints || []), mint];
+              }
+              
+              const deposit: NDKCashuDeposit = this.wallet!.deposit(amount, mint);
+              const invoice = await deposit.start();
+              
+              // Resolve immediately on first success
+              if (!hasResolved) {
+                hasResolved = true;
+                resolve({ mint, deposit, invoice });
+              }
+            } catch (error) {
+              console.log(`⚠️ Mint ${mint} failed: ${error}`);
+              completedAttempts++;
+              
+              // If all mints failed, reject
+              if (completedAttempts === this.walletData!.mints.length && !hasResolved) {
+                reject(new Error('All mints failed to create invoice'));
+              }
+            }
+          });
+        });
+        
+        const { mint, deposit, invoice } = firstSuccessfulMint;
+        mintUrl = mint;
+        
+        console.log(invoice);
+        
+        // Wait for the deposit to complete
+        return new Promise((resolve, reject) => {
+          deposit.on("success", () => {
+            this.saveWallet();
+            resolve({ success: true, amount, mintUrl: mintUrl! });
+          });
+          
+          deposit.on("error", (error) => {
+            console.error(`❌ Deposit failed:`, error);
+            reject(error);
+          });
+          
+          // Optional: Add a timeout after 10 minutes
+          setTimeout(() => {
+            resolve({ timeout: true, amount, mintUrl: mintUrl!, invoice });
+          }, 10 * 60 * 1000);
+        });
+      }
+      
+      // Single mint specified - original logic
+      // Ensure mintUrl is always defined by this point
+      if (!mintUrl) {
+        throw new Error('Mint URL is undefined. This should not happen.');
+      }
       
       // Add mint to wallet configuration if not already present
       if (!this.walletData.mints.includes(mintUrl)) {
@@ -286,15 +396,14 @@ class MCPWallet {
       // 2. Start the deposit process and get the invoice
       const invoice = await deposit.start();
       
-      console.log(`\n⚡️ Please pay this ${amount} sat Lightning invoice: ⚡️\n`);
       console.log(invoice);
-      console.log('\n-----------------------------------------------------\n');
       
       // 3. Wait for the deposit to complete
       return new Promise((resolve, reject) => {
         deposit.on("success", () => {
           this.saveWallet();
-          resolve({ success: true, amount, mintUrl });
+          // We've ensured mintUrl is defined by this point
+          resolve({ success: true, amount, mintUrl: mintUrl! });
         });
         
         deposit.on("error", (error) => {
@@ -304,7 +413,7 @@ class MCPWallet {
         
         // Optional: Add a timeout after 10 minutes
         setTimeout(() => {
-          resolve({ timeout: true, amount, mintUrl, invoice });
+          resolve({ timeout: true, amount, mintUrl: mintUrl!, invoice });
         }, 10 * 60 * 1000);
       });
       
@@ -439,14 +548,14 @@ class MCPServer {
           },
           {
             name: 'deposit',
-            description: 'Create a deposit invoice for the specified amount and mint',
+            description: 'Create a deposit invoice (bolt11) for the specified amount and mint. Returns the invoice immediately for payment. If no mint is specified, all mints will be tried concurrently and the first successful response will be used.',
             inputSchema: {
               type: 'object',
               properties: {
                 amount: { type: 'number', description: 'Amount in satoshis' },
-                mintUrl: { type: 'string', description: 'Mint URL to deposit to' }
+                mintUrl: { type: 'string', description: 'Mint URL to deposit to (optional - all mints tried concurrently if not provided)' }
               },
-              required: ['amount', 'mintUrl']
+              required: ['amount']
             }
           },
           {
@@ -513,19 +622,19 @@ class MCPServer {
 
       case 'deposit':
         const { amount, mintUrl } = args;
-        if (!amount || !mintUrl) {
-          throw new Error('Amount and mintUrl are required');
+        if (!amount) {
+          throw new Error('Amount is required');
         }
-        const depositResult = await this.wallet.deposit(amount, mintUrl);
+        const invoice = await this.wallet.createDepositInvoice(amount, mintUrl);
         return { 
           content: [{ 
             type: 'text', 
-            text: depositResult.success 
-              ? `Deposit successful! ${amount} sats deposited to wallet`
-              : depositResult.timeout
-                ? `Deposit timeout after 10 minutes. Invoice: ${depositResult.invoice}`
-                : 'Deposit failed'
-          }] 
+            text: `Deposit invoice created. Pay this invoice: ${invoice.bolt11}`
+          }],
+          invoice: invoice.bolt11,
+          amount: invoice.amount,
+          mintUrl: invoice.mintUrl,
+          depositId: invoice.depositId
         };
 
       case 'pay':
@@ -533,16 +642,50 @@ class MCPServer {
         if (!bolt11) {
           throw new Error('bolt11 invoice is required');
         }
-        await this.wallet.pay(bolt11);
-        return { content: [{ type: 'text', text: 'Payment successful' }] };
+        const payResult = await this.wallet.pay(bolt11);
+        
+        if (payResult && payResult.success !== false) {
+          return { 
+            content: [{ type: 'text', text: 'Payment successful' }],
+            success: true,
+            bolt11,
+            payResult
+          };
+        } else {
+          return { 
+            content: [{ type: 'text', text: 'Payment failed' }],
+            success: false,
+            bolt11,
+            payResult
+          };
+        }
 
       case 'zap':
         const { recipient, amount: zapAmount, comment = '' } = args;
         if (!recipient || !zapAmount) {
           throw new Error('recipient and amount are required');
         }
-        await this.wallet.zap(recipient, zapAmount, comment);
-        return { content: [{ type: 'text', text: `Successfully zapped ${zapAmount} sats to ${recipient}` }] };
+        const zapResult = await this.wallet.zap(recipient, zapAmount, comment);
+        
+        if (zapResult && zapResult.success !== false) {
+          return { 
+            content: [{ type: 'text', text: `Successfully zapped ${zapAmount} sats to ${recipient}` }],
+            success: true,
+            recipient,
+            amount: zapAmount,
+            comment,
+            zapResult
+          };
+        } else {
+          return { 
+            content: [{ type: 'text', text: `Failed to zap ${zapAmount} sats to ${recipient}` }],
+            success: false,
+            recipient,
+            amount: zapAmount,
+            comment,
+            zapResult
+          };
+        }
 
       case 'add_mint':
         const { mintUrl: mintToAdd } = args;
@@ -617,8 +760,8 @@ async function main(): Promise<void> {
       case 'deposit':
         const amount = parseInt(remainingArgs[0]);
         const mintUrl = remainingArgs[1];
-        if (!amount || !mintUrl) {
-          console.error('Usage: deposit <amount> <mint_url>');
+        if (!amount) {
+          console.error('Usage: deposit <amount> [mint_url]');
           process.exit(1);
         }
         await wallet.deposit(amount, mintUrl);
@@ -657,7 +800,7 @@ async function main(): Promise<void> {
         console.log('Available commands:');
         console.log('  get_balance - Get total wallet balance');
         console.log('  get_mint_balances - Get balance breakdown per mint');
-        console.log('  deposit <amount> <mint_url> - Create deposit invoice');
+        console.log('  deposit <amount> [mint_url] - Create deposit invoice (all mints tried concurrently if not specified)');
         console.log('  pay <bolt11> - Pay a lightning invoice');
         console.log('  zap <npub_or_nip05> <amount> [comment] - Send a zap');
         console.log('  add_mint <mint_url> - Add a mint to the wallet');

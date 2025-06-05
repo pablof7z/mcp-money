@@ -1,3 +1,9 @@
 # Ignore MCP configuration containing secrets
 .roo/mcp.json
+.tenex.jsonnode_modules
+dist
+.roo
 .tenex.json
+.wallet.json
+bun.lock
+package-lock.json

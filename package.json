@@ -1,6 +1,6 @@
 {
   "name": "mcp-money",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "MCP tool for NDK money operations with mint info caching",
   "main": "dist/wallet.js",
   "bin": {

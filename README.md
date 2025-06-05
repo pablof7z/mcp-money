@@ -74,6 +74,64 @@ When running as an MCP server, the following tools are available:
 - `zap`: Send a zap to a user
 - `add_mint`: Add a mint to the wallet
 
+## Integration with AI Assistants
+
+### Claude Code Integration
+
+To use this wallet with [Claude Code](https://claude.ai/code), add it to your project's MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "mcp-money": {
+      "command": "npx",
+      "args": ["mcp-money"]
+    }
+  }
+}
+```
+
+Or install globally and reference the binary directly:
+
+```bash
+npm install -g mcp-money
+```
+
+```json
+{
+  "mcpServers": {
+    "mcp-money": {
+      "command": "mcp-money"
+    }
+  }
+}
+```
+
+### Goose Integration
+
+To use this wallet with [Goose](https://github.com/square/goose), add it to your `~/.config/goose/config.yaml`:
+
+If you have an nsec you want to use, you can set it by passing it as `--nsec nsec1...`.
+
+```yaml
+extensions:
+  money:
+    args:
+    - -y
+    - mcp-money
+    bundled: null
+    cmd: npx
+    description: Money for agents
+    enabled: true
+    env_keys: []
+    envs: {}
+    name: money
+    timeout: 300
+    type: stdio
+```
+
+After adding the configuration, restart your AI assistant to begin using the wallet tools.
+
 ## Configuration
 
 The wallet automatically creates a `.wallet.json` file to store:
@@ -83,32 +141,6 @@ The wallet automatically creates a `.wallet.json` file to store:
 - Configured relays
 - Configured mints
 - Cached mint information
-
-### Default Relays
-
-- `wss://relay.damus.io`
-- `wss://nos.lol`
-- `wss://relay.nostr.band`
-- `wss://nostr.mutinywallet.com`
-
-### Default Mints
-
-- `https://mint.coinos.io`
-- `https://mint.lnvoltz.com`
-- `https://mint.chorus.community`
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run dev
-
-# Start wallet
-npm start
-```
 
 ## Architecture
 
