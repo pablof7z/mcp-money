@@ -1,0 +1,56 @@
+{
+  "name": "mcp-money",
+  "version": "0.2.0",
+  "description": "MCP tool for NDK money operations with mint info caching",
+  "main": "dist/wallet.js",
+  "bin": {
+    "mcp-money": "dist/wallet.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "bun run wallet.ts",
+    "dev": "bun --watch wallet.ts",
+    "mcp": "node dist/wallet.js",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@nostr-dev-kit/ndk": "^2.14.24",
+    "@nostr-dev-kit/ndk-wallet": "0.6.2",
+    "nostr-tools": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "nostr",
+    "wallet",
+    "mcp",
+    "ndk",
+    "typescript",
+    "cashu",
+    "lightning",
+    "zap",
+    "ecash"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pablof7z/mcp-money.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pablof7z/mcp-money/issues"
+  },
+  "homepage": "https://github.com/pablof7z/mcp-money#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

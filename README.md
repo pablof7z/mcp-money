@@ -1,8 +1,8 @@
-# MCP Wallet
+# MCP Money
 
-![MCP Wallet](https://ei.marketwatch.com/Multimedia/2018/02/13/Photos/ZG/MW-GD647_skynet_20180213113524_ZG.jpg?uuid=e41f2218-10db-11e8-b127-9c8e992d421e)
+![MCP Money](https://ei.marketwatch.com/Multimedia/2018/02/13/Photos/ZG/MW-GD647_skynet_20180213113524_ZG.jpg?uuid=e41f2218-10db-11e8-b127-9c8e992d421e)
 
-An MCP (Model Context Protocol) wallet implementation for Nostr using NDK (Nostr Development Kit) with Cashu ecash functionality.
+An MCP (Model Context Protocol) money implementation for Nostr using NDK (Nostr Development Kit) with Cashu ecash functionality.
 
 ## Features
 
@@ -17,7 +17,7 @@ An MCP (Model Context Protocol) wallet implementation for Nostr using NDK (Nostr
 ## Installation
 
 ```bash
-npm install mcp-wallet
+npm install mcp-money
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ npm install mcp-wallet
 Run without arguments to start the MCP server:
 
 ```bash
-npx mcp-wallet
+npx mcp-money
 ```
 
 ### CLI Mode
@@ -36,22 +36,22 @@ Use specific commands for direct wallet operations:
 
 ```bash
 # Get total balance
-npx mcp-wallet get_balance
+npx mcp-money get_balance
 
 # Get balance per mint
-npx mcp-wallet get_mint_balances
+npx mcp-money get_mint_balances
 
 # Create deposit invoice
-npx mcp-wallet deposit 1000 https://testnut.cashu.space
+npx mcp-money deposit 1000 https://testnut.cashu.space
 
 # Pay lightning invoice
-npx mcp-wallet pay lnbc1...
+npx mcp-money pay lnbc1...
 
 # Send a zap
-npx mcp-wallet zap npub1... 100 "Great post!"
+npx mcp-money zap npub1... 100 "Great post!"
 
 # Add a new mint
-npx mcp-wallet add_mint https://mint.example.com
+npx mcp-money add_mint https://mint.example.com
 ```
 
 ### Authentication
